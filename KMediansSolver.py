@@ -80,3 +80,66 @@ class IntegerProgram(KMediansSolver):
             return optimal_objective, selected_medians, assignments
         else:
             return "Could not find optimal"
+
+
+class LocalSearchSolver(KMediansSolver):
+    def __init__(self, instance, k, swap_limit=1, epsilon=1e-6, greedy=True):
+        super().__init__(instance, k)
+        self.swap_limit = swap_limit
+        self.epsilon = epsilon
+        self.greedy = greedy
+
+    def solve(self):
+        vertices = self.instance.vertices
+        current_medians = list(np.random.choice(vertices.shape[0], self.k, replace=False))
+        current_objective, current_assignments = self.obj(current_medians)
+
+        improved = True
+        num_iter = 0
+        while improved:
+            improved = False
+            best_swap_out = None
+            best_swap_in = None
+            best_objective = current_objective
+
+            non_medians = [i for i in range(len(vertices)) if i not in current_medians]
+
+            for swap_out_set in combinations(current_medians, min(self.swap_limit, len(current_medians))):
+                for swap_in_set in combinations(non_medians, len(swap_out_set)):
+                    # Evaluate candidate solution
+                    candidate_medians = current_medians[:]
+                    for swap_out in swap_out_set:
+                        candidate_medians.remove(swap_out)
+                    candidate_medians.extend(swap_in_set)
+
+                    candidate_objective, _ = self.obj(candidate_medians)
+
+                    improvement = current_objective - candidate_objective
+                    if improvement > self.epsilon:
+                        if self.greedy:
+                            # Greedy mode: Take the first improving swap
+                            current_medians = candidate_medians
+                            current_objective, current_assignments = self.obj(current_medians)
+                            improved = True
+                            break
+                        else:
+                            # Best mode: Track the best swap
+                            if candidate_objective < best_objective:
+                                best_swap_out = swap_out_set
+                                best_swap_in = swap_in_set
+                                best_objective = candidate_objective
+                if improved and self.greedy:
+                    break
+
+            # Execute the best swap if no greedy improvement was found
+            if not self.greedy and best_swap_out and best_swap_in:
+                for swap_out in best_swap_out:
+                    current_medians.remove(swap_out)
+                current_medians.extend(best_swap_in)
+                current_objective, current_assignments = self.obj(current_medians)
+                improved = True
+            num_iter += 1
+
+        # Return the results
+        return current_objective, current_medians, current_assignments, num_iter
+
