@@ -111,9 +111,7 @@ class LocalSearchSolver(KMediansSolver):
                     for swap_out in swap_out_set:
                         candidate_medians.remove(swap_out)
                     candidate_medians.extend(swap_in_set)
-
                     candidate_objective, _ = self.obj(candidate_medians)
-
                     improvement = current_objective - candidate_objective
                     if improvement > self.epsilon:
                         if self.greedy:

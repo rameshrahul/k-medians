@@ -1,5 +1,3 @@
-#import taichi as ti
-#import taichi.math as tm
 import matplotlib.pyplot as plt
 import numpy as np
 from KMediansSolver import *
