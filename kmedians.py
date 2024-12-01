@@ -15,76 +15,139 @@ def visualize(vertices, assignments):
     for i, cluster in enumerate(unique_clusters):
         cluster_points = vertices[assignments == cluster]
         plt.scatter(cluster_points[:, 0], cluster_points[:, 1], label=f"Cluster {cluster}", color=colors(i))
-    
+
     plt.title("clusters of vertices")
     plt.legend()
     plt.show()
 
 
+def evaluate_k_medians_solvers(instances, solvers, ks, local_search_params):
+    results = []
+
+    for i, instance in enumerate(instances):
+        print(f"Evaluating instance {i + 1}/{len(instances)}...")
+
+        for k in ks:
+            print(f"  Testing with k = {k}...")
+            if isinstance(instance, TightInstance):
+                instance = TightInstance()
+                instance.initialize(k)
+
+            # Calculate the optimal solution using the integer programming solver
+            ip_solver = solvers["IntegerProgramSolver"](instance, k)
+            start_time = time.time()
+            optimal_value, _, _ = ip_solver.solve()
+            ip_runtime = time.time() - start_time
+
+            print(f"\tOptimal solution found (IP solver): {optimal_value} in {ip_runtime:.2f} seconds.")
+
+            # Evaluate all solvers
+            for solver_name, solver_class in solvers.items():
+                if solver_name == "IntegerProgramSolver":
+                    continue  # Skip re-running the integer program solver
+
+                if solver_name == "LocalSearchSolver":
+                    # Test LocalSearchSolver with different parameters
+                    for params in local_search_params:
+                        print(f"\tTesting {solver_name} with params {params}...")
+                        solver = solver_class(instance, k, **params)
+
+                        start_time = time.time()
+                        solution_value, _, _, num_iter = solver.solve()
+                        runtime = time.time() - start_time
+                        approximation_ratio = solution_value / optimal_value
+
+                        results.append({
+                            "instance": i,
+                            "solver": solver_name,
+                            "k": k,
+                            "params": params,
+                            "runtime": runtime,
+                            "approximation_ratio": approximation_ratio,
+                            "num_iterations": num_iter
+                        })
+
+                        print(f"\tRuntime: {runtime:.2f}s | Approximation Ratio: {approximation_ratio:.4f} | "
+                              f"Iterations: {num_iter}")
+                elif solver_name == "PrimalDualSolver":
+                    print(f"\tTesting {solver_name}...")
+                    solver = solver_class(instance, k)
+
+                    start_time = time.time()
+                    solution_value, _, _, num_iter = solver.solve()
+                    runtime = time.time() - start_time
+                    approximation_ratio = solution_value / optimal_value
+
+                    results.append({
+                        "instance": i,
+                        "solver": solver_name,
+                        "k": k,
+                        "params": None,
+                        "num_ier": num_iter,
+                        "runtime": runtime,
+                        "approximation_ratio": approximation_ratio
+                    })
+
+                    print(f"\tRuntime: {runtime:.2f}s | Approximation Ratio: {approximation_ratio:.4f}| "
+                          f"Iterations: {num_iter}")
+                else:
+                    # Test other solvers without additional parameters
+                    print(f"\tTesting {solver_name}...")
+                    solver = solver_class(instance, k)
+
+                    start_time = time.time()
+                    solution_value, _, _ = solver.solve()
+                    runtime = time.time() - start_time
+                    approximation_ratio = solution_value / optimal_value
+
+                    results.append({
+                        "instance": i,
+                        "solver": solver_name,
+                        "k": k,
+                        "params": None,
+                        "runtime": runtime,
+                        "approximation_ratio": approximation_ratio
+                    })
+
+                    print(f"\tRuntime: {runtime:.2f}s | Approximation Ratio: {approximation_ratio:.4f}")
+
+    return results
+
+
 # Fixing random state for reproducibility
-#np.random.seed(123123) #19680801
+# np.random.seed(123123) #19680801
 
-n = 30
+n = 100
 data_range = 100
-random_points = np.random.rand(n, 2)*data_range
+random_points = np.random.rand(n, 2) * data_range
+
+ks = [3, 5, 7, 15]
+instances = [EuclideanInstance(random_points)]
+# instances = [TightInstance()]
 
 
-instance = EuclideanInstance(random_points)
-k = 5
+# Define solvers
+solvers = {"IntegerProgramSolver": IntegerProgramSolver, "PrimalDualSolver": PrimalDualSolver}
 
-print("running IP")
-start = time.time()
-ipsolver = IntegerProgram(instance, k)
-obj, medians, assignments = ipsolver.solve()
-print("IP opt: {}".format(obj))
-print("IP runtime: {}".format(time.time() - start))
+# Define LocalSearchSolver parameters to test
+local_search_params = [
+    {"epsilon": 10, "greedy": True, "swap_limit": 2},
+    {"epsilon": 20, "greedy": False, "swap_limit": 1},
+    {"epsilon": 100, "greedy": True, "swap_limit": 1}
+]
 
-# print("running brute force")
-# bruteforce = BruteForceSolver(instance, k)
-# start = time.time()
-# obj, medians, assignments = bruteforce.solve()
-# print("Brute Force opt: {}".format(obj))
-# print("brute force runtime: {}".format(time.time() - start))
+# Run evaluation
+results = evaluate_k_medians_solvers(instances, solvers, ks, local_search_params)
 
-print("running local search greedy")
-start = time.time()
-lsgreedy = LocalSearchSolver(instance, k, epsilon=10, greedy=True)
-obj, medians, assignments, num_iter = lsgreedy.solve()
-print("LS greedy opt: {}".format(obj))
-print("LS greedy runtime: {}".format(time.time() - start))
-print("LS greedy num_iter: {}".format(num_iter))
-
-print("running local search best")
-start = time.time()
-lsbest = LocalSearchSolver(instance, k, epsilon=10, greedy=False)
-obj, medians, assignments, num_iter = lsbest.solve()
-print("LS best opt: {}".format(obj))
-print("LS best runtime: {}".format(time.time() - start))
-print("LS best num_iter: {}".format(num_iter))
-
-print("running local search best k-swap")
-start = time.time()
-lsbest = LocalSearchSolver(instance, k, swap_limit=k-1, epsilon=10, greedy=False)
-obj, medians, assignments, num_iter = lsbest.solve()
-print("LS best opt: {}".format(obj))
-print("LS best runtime: {}".format(time.time() - start))
-print("LS best num_iter: {}".format(num_iter))
-
+# visualize(random_points, assignments)
+# #ax = fig.add_subplot(projection='3d')
 #
-# print(obj)
-# print(medians)
-# print(assignments)
+# fig = plt.figure()
+# ax = fig.add_subplot()
+# x, y = random_points.T
+# ax.scatter(x, y, marker='o')
+#
+# ax.set_xlabel('X Label')
+# ax.set_ylabel('Y Label')
 
-
-visualize(random_points, assignments)
-#ax = fig.add_subplot(projection='3d')
-
-fig = plt.figure()
-ax = fig.add_subplot()
-x, y = random_points.T
-ax.scatter(x, y, marker='o')
-
-ax.set_xlabel('X Label')
-ax.set_ylabel('Y Label')
-
-#plt.show()
+# plt.show()
