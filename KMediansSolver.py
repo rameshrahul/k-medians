@@ -42,44 +42,49 @@ class BruteForceSolver(KMediansSolver):
         return best_obj, best_medians, best_assignments
 
 
-class IntegerProgram(KMediansSolver):
+class IntegerProgramSolver(KMediansSolver):
     def solve(self):
         vertices = self.instance.vertices
         n = len(vertices)  # Number of vertices
 
         distances = self.distance_matrix
 
-        IPmod = Model("k-medians")
+        with Env(empty=True) as env:
+            env.setParam('OutputFlag', 0)
+            env.start()
+            with Model("k-medians", env=env) as IPmod:
+                # IPmod = Model("k-medians")
 
-        x = IPmod.addVars(n, n, vtype=GRB.BINARY, name="x")
-        y = IPmod.addVars(n, vtype=GRB.BINARY, name="y")
+                x = IPmod.addVars(n, n, vtype=GRB.BINARY, name="x")
+                y = IPmod.addVars(n, vtype=GRB.BINARY, name="y")
 
-        IPmod.setObjective(quicksum(distances[i][j] * x[i, j] for i in range(n) for j in range(n)), GRB.MINIMIZE)
+                IPmod.setObjective(quicksum(distances[i][j] * x[i, j] for i in range(n) for j in range(n)),
+                                   GRB.MINIMIZE)
 
-        IPmod.addConstrs(
-            (quicksum(x[i, j] for j in range(n)) >= 1 for i in range(n)),
-            name="vertex"
-        )
+                IPmod.addConstrs(
+                    (quicksum(x[i, j] for j in range(n)) >= 1 for i in range(n)),
+                    name="vertex"
+                )
 
-        IPmod.addConstrs(
-            (x[i, j] <= y[j] for i in range(n) for j in range(n)),
-            name="ij"
-        )
+                IPmod.addConstrs(
+                    (x[i, j] <= y[j] for i in range(n) for j in range(n)),
+                    name="ij"
+                )
 
-        IPmod.addConstr(
-            quicksum(y[j] for j in range(n)) == self.k,
-            name="k"
-        )
+                IPmod.addConstr(
+                    quicksum(y[j] for j in range(n)) == self.k,
+                    name="k"
+                )
 
-        IPmod.optimize()
+                IPmod.optimize()
 
-        if IPmod.status == GRB.OPTIMAL:
-            optimal_objective = IPmod.objVal
-            selected_medians = [j for j in range(n) if y[j].x > 0.5]
-            min_obj, assignments = self.obj(selected_medians)
-            return optimal_objective, selected_medians, assignments
-        else:
-            return "Could not find optimal"
+                if IPmod.status == GRB.OPTIMAL:
+                    optimal_objective = IPmod.objVal
+                    selected_medians = [j for j in range(n) if y[j].x > 0.5]
+                    min_obj, assignments = self.obj(selected_medians)
+                    return optimal_objective, selected_medians, assignments
+                else:
+                    return "Could not find optimal"
 
 
 class LocalSearchSolver(KMediansSolver):
@@ -91,7 +96,10 @@ class LocalSearchSolver(KMediansSolver):
 
     def solve(self):
         vertices = self.instance.vertices
-        current_medians = list(np.random.choice(vertices.shape[0], self.k, replace=False))
+        if self.instance.initial_medians is None:
+            current_medians = list(np.random.choice(vertices.shape[0], self.k, replace=False))
+        else:
+            current_medians = self.instance.initial_medians
         current_objective, current_assignments = self.obj(current_medians)
 
         improved = True
@@ -141,3 +149,112 @@ class LocalSearchSolver(KMediansSolver):
         # Return the results
         return current_objective, current_medians, current_assignments, num_iter
 
+
+class PrimalDualSolver(KMediansSolver):
+    def __init__(self, instance, k, tolerance=1e-5, max_iterations=100):
+        super().__init__(instance, k)
+        self.tolerance = tolerance
+        self.max_iterations = max_iterations
+
+    def neighbors_i(self, i, v):
+        U = range(len(self.instance.vertices))
+        return [j for j in U if v[j] >= self.distance_matrix[i][j]]
+
+    def neighbors_j(self, j, v):
+        U = range(len(self.instance.vertices))
+        return [i for i in U if v[j] >= self.distance_matrix[i][j]]
+
+    def solve_with_lambda(self, lam):
+        vertices = range(len(self.instance.vertices))
+        num_vertices = len(vertices)
+        v = np.zeros(num_vertices)  # Dual variable v_j initialized to 0 for all j
+        w = np.zeros((num_vertices, num_vertices))  # Dual variable w_ij initialized to 0
+
+        S = set(vertices)  # S starts as all vertices
+        T = set()  # T starts as an empty set
+
+        # Step 2: Primal-Dual Update
+        while S:
+            # Calculate the smallest increment to grow dual variables
+            increment = np.inf
+
+            for j in S:
+                for i in vertices:
+                    if i not in T:  # Tight dual inequality (v_j >= c_ij - w_ij)
+                        if np.sum(w[i, :]) < lam:
+                            remaining = lam - np.sum(w[i, :])
+                            max_increment = remaining / len(S)  # Distribute increment uniformly across active variables
+                            increment = min(increment, max_increment)
+                for i in T:  # Neighbor condition (v_j >= c_ij)
+                    increment = min(increment, self.distance_matrix[i][j] - v[j])
+
+            # Increment dual variables
+            for j in S:
+                v[j] += increment
+                for i in self.neighbors_j(j, v):
+                    w[i][j] += increment
+
+            # Check stopping conditions
+            neighbors_added = set()
+            for j in S:
+                for i in T:
+                    if v[j] >= self.distance_matrix[i][j]:  # Neighbor condition
+                        neighbors_added.add(j)
+                for i in vertices:
+                    if i not in T and v[j] >= self.distance_matrix[i][j]:  # Tight dual inequality
+                        T.add(i)
+                        neighbors_added.update(self.neighbors_i(i, v))
+
+            S.difference_update(neighbors_added)
+
+        # Step 3: Initialize V
+        V = set()
+
+        # Step 4: Process T
+        while T:
+            i = T.pop()  # Pick any vertex in T
+            V.add(i)
+
+            # Remove all vertices from T that share neighbors with i
+            neighbors_to_remove = set()
+            for h in T:
+                if any(w[i][j] > 0 and w[h][j] > 0 for j in vertices):
+                    neighbors_to_remove.add(h)
+            T.difference_update(neighbors_to_remove)
+
+        return list(V)
+
+    def solve(self):
+        lambda_left = 0
+        lambda_right = np.sum(self.distance_matrix)  # Upper bound for lambda
+        best_medians = None
+
+        iteration = 0
+        while iteration < self.max_iterations:
+            print("iterating")
+            iteration += 1
+            # Midpoint lambda
+            lam = (lambda_left + lambda_right) / 2
+
+            # Compute medians using the current lambda
+            medians = self.solve_with_lambda(lam)
+            print(lam, len(medians))
+
+            # Check the size of the medians set
+            if len(medians) == self.k:
+                best_medians = medians
+                break  # Exact solution found
+            elif len(medians) > self.k:
+                # Too many medians; increase lambda
+                lambda_left = lam
+            else:
+                # Too few medians; decrease lambda
+                lambda_right = lam
+
+            # Check convergence
+            if abs(lambda_right - lambda_left) < self.tolerance:
+                break
+
+        # Final lambda and medians
+        total_dist, assignments = self.obj(best_medians)
+        return total_dist, best_medians, assignments, iteration
