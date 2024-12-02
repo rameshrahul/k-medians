@@ -231,15 +231,12 @@ class PrimalDualSolver(KMediansSolver):
 
         iteration = 0
         while iteration < self.max_iterations:
-            print("iterating")
             iteration += 1
             # Midpoint lambda
             lam = (lambda_left + lambda_right) / 2
 
             # Compute medians using the current lambda
             medians = self.solve_with_lambda(lam)
-            print(lam, len(medians))
-
             # Check the size of the medians set
             if len(medians) == self.k:
                 best_medians = medians
