@@ -121,30 +121,34 @@ n = 100
 data_range = 100
 random_points = np.random.rand(n, 2) * data_range
 
-ks = [3, 13, 55]
-#instances = [EuclideanInstance(random_points)]
+ks = [333]
+#instances = [ManhattanInstance(random_points)]
 instances = [TightInstance()]
 
 
 # Define solvers
-solvers = {"IntegerProgramSolver": IntegerProgramSolver, "LocalSearchSolver": LocalSearchSolver,
+solvers = {"IntegerProgramSolver": IntegerProgramSolver, "LocalSearchSolver": LocalSearchSolver, "PrimalDualSolver": PrimalDualSolver
            }
 
 # Define LocalSearchSolver parameters to test
 local_search_params = [
-    {"epsilon": 10, "greedy": True, "swap_limit": 1},
-    {"epsilon": 20, "greedy": True, "swap_limit": 1},
-    {"epsilon": 100, "greedy": True, "swap_limit": 1},
-    {"epsilon": 10, "greedy": False, "swap_limit": 1},
-    {"epsilon": 20, "greedy": False, "swap_limit": 1},
-    {"epsilon": 100, "greedy": False, "swap_limit": 1},
-    {"epsilon": 10, "greedy": True, "swap_limit": 2},
-    {"epsilon": 20, "greedy": True, "swap_limit": 2},
-    {"epsilon": 100, "greedy": True, "swap_limit": 2},
-    {"epsilon": 10, "greedy": False, "swap_limit": 2},
-    {"epsilon": 20, "greedy": False, "swap_limit": 2},
-    {"epsilon": 100, "greedy": False, "swap_limit": 2}
+    {"epsilon": 100, "greedy": True, "swap_limit": 1}
 ]
+
+# local_search_params = [
+#     {"epsilon": 10, "greedy": True, "swap_limit": 1},
+#     {"epsilon": 20, "greedy": True, "swap_limit": 1},
+#     {"epsilon": 100, "greedy": True, "swap_limit": 1},
+#     {"epsilon": 10, "greedy": False, "swap_limit": 1},
+#     {"epsilon": 20, "greedy": False, "swap_limit": 1},
+#     {"epsilon": 100, "greedy": False, "swap_limit": 1},
+#     {"epsilon": 10, "greedy": True, "swap_limit": 2},
+#     {"epsilon": 20, "greedy": True, "swap_limit": 2},
+#     {"epsilon": 100, "greedy": True, "swap_limit": 2},
+#     {"epsilon": 10, "greedy": False, "swap_limit": 2},
+#     {"epsilon": 20, "greedy": False, "swap_limit": 2},
+#     {"epsilon": 100, "greedy": False, "swap_limit": 2}
+# ]
 
 # Run evaluation
 results = evaluate_k_medians_solvers(instances, solvers, ks, local_search_params)
