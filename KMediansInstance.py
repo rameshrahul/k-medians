@@ -25,6 +25,11 @@ class EuclideanInstance(KMediansInstance):
         return np.linalg.norm(v1 - v2)
 
 
+class ManhattanInstance(KMediansInstance):
+    def metric(self, v1, v2):
+        return np.linalg.norm(v1 - v2, ord=1)
+
+
 class TightInstance:
 
     def __init__(self):
