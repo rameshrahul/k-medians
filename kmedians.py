@@ -141,8 +141,8 @@ visualize(random_points, assignments, best_medians, total_dist)
 visualize(random_points, assignments2, best_medians2, total_dist2)
 
 
-# Define solvers "IntegerProgramSolver": IntegerProgramSolver,
-solvers = { "LocalSearchSolver": LocalSearchSolver, "PrimalDualSolver": PrimalDualSolver
+# Define solvers
+solvers = { "IntegerProgramSolver": IntegerProgramSolver, "LocalSearchSolver": LocalSearchSolver, "PrimalDualSolver": PrimalDualSolver
            }
 
 # Define LocalSearchSolver parameters to test
