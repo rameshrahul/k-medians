@@ -6,7 +6,7 @@ from KMediansInstance import *
 import time
 
 
-def visualize(vertices, assignments):
+def visualize(vertices, assignments, medians, obj):
     unique_clusters = np.unique(assignments)
     colors = plt.get_cmap('tab10', len(unique_clusters))
 
@@ -15,9 +15,15 @@ def visualize(vertices, assignments):
     for i, cluster in enumerate(unique_clusters):
         cluster_points = vertices[assignments == cluster]
         plt.scatter(cluster_points[:, 0], cluster_points[:, 1], label=f"Cluster {cluster}", color=colors(i))
+        #plt.
 
-    plt.title("clusters of vertices")
-    plt.legend()
+    median_points = vertices[medians]
+    plt.scatter(median_points[:, 0], median_points[:, 1], color='red', edgecolor='black', 
+                s=100, label='Medians', zorder=5)
+
+    plt.title("K-Median clusters, Objective = {:.2f}".format(obj))
+    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+    plt.tight_layout()
     plt.show()
 
 
@@ -115,19 +121,28 @@ def evaluate_k_medians_solvers(instances, solvers, ks, local_search_params):
 
 
 # Fixing random state for reproducibility
-# np.random.seed(123123) #19680801
+np.random.seed(123123) #19680801
 
 n = 100
 data_range = 100
 random_points = np.random.rand(n, 2) * data_range
 
-ks = [333]
+ks = [5]
 #instances = [ManhattanInstance(random_points)]
-instances = [TightInstance()]
+instances = [ManhattanInstance(random_points), EuclideanInstance(random_points)]
+
+pd = PrimalDualSolver(instances[0], 5)
+total_dist, best_medians, assignments, iteration = pd.solve()
+pd = PrimalDualSolver(instances[1], 5)
+total_dist2, best_medians2, assignments2, iteration2 = pd.solve()
 
 
-# Define solvers
-solvers = {"IntegerProgramSolver": IntegerProgramSolver, "LocalSearchSolver": LocalSearchSolver, "PrimalDualSolver": PrimalDualSolver
+visualize(random_points, assignments, best_medians, total_dist)
+visualize(random_points, assignments2, best_medians2, total_dist2)
+
+
+# Define solvers "IntegerProgramSolver": IntegerProgramSolver,
+solvers = { "LocalSearchSolver": LocalSearchSolver, "PrimalDualSolver": PrimalDualSolver
            }
 
 # Define LocalSearchSolver parameters to test
@@ -151,7 +166,7 @@ local_search_params = [
 # ]
 
 # Run evaluation
-results = evaluate_k_medians_solvers(instances, solvers, ks, local_search_params)
+#results = evaluate_k_medians_solvers(instances, solvers, ks, local_search_params)
 
 # visualize(random_points, assignments)
 # #ax = fig.add_subplot(projection='3d')
